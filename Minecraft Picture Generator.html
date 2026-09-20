@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft Picture Generator</title>
+    <!-- Библиотека для создания ZIP-архивов -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --bg: #121212;
+            --panel: #1e1e1e;
+            --accent1: #9933CC; /* Основной акцент */
+            --accent2: #FF66CC; /* Hover акцент */
+            --text: #ffffff;
+            --gray: #aaaaaa;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            background-color: var(--panel);
+            padding: 40px;
+            border: 2px solid var(--accent1);
+            border-radius: 15px;
+            width: 500px;
+            box-shadow: 0 0 20px rgba(0,0,0, 0.5);
+            position: relative;
+        }
+        .screen.active { display: flex; }
+
+        h1 { color: var(--accent2); text-align: center; margin-bottom: 20px; }
+        h2 { color: var(--text); text-align: center; margin-bottom: 20px; font-size: 22px; }
+
+        button {
+            background-color: var(--accent1);
+            color: var(--bg);
+            border: none;
+            padding: 15px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 0;
+            width: 100%;
+            transition: 0.3s;
+        }
+        button:hover:not(:disabled) { background-color: var(--accent2); }
+        button:disabled { background-color: #333; color: #555; cursor: not-allowed; }
+        
+        .btn-secondary { background-color: #333; color: var(--text); }
+        .btn-secondary:hover { background-color: #444; }
+
+        .form-group { width: 100%; margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; color: var(--gray); font-size: 14px; }
+        
+        input[type="text"], input[type="number"] {
+            width: 100%; padding: 10px; box-sizing: border-box;
+            background-color: #000; color: #fff; border: 1px solid var(--accent1); border-radius: 5px;
+        }
+        input[type="file"] { margin-top: 10px; color: var(--accent2); width: 100%; }
+
+        .radio-group, .checkbox-group { display: flex; justify-content: space-between; margin-bottom: 20px; width: 100%;}
+        .radio-group label, .checkbox-group label { color: var(--text); cursor: pointer; font-size: 15px;}
+
+        canvas {
+            border: 2px solid var(--accent1);
+            margin-top: 15px;
+            background: #000;
+            image-rendering: pixelated;
+        }
+
+        .error { color: var(--accent2); font-size: 14px; margin-top: 5px; }
+        
+        /* Стили кастомных настроек */
+        .settings-card {
+            background: #111;
+            padding: 15px;
+            border-radius: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+        .custom-colors { display: flex; justify-content: space-around; width: 100%; }
+        .color-item { display: flex; flex-direction: column; align-items: center; gap: 5px;}
+        input[type="color"] { border: none; width: 50px; height: 50px; border-radius: 8px; cursor: pointer; background: none;}
+        
+        /* Плашки для подсказок ЛКМ/ПКМ */
+        .badge-container { display: flex; justify-content: center; gap: 15px; width: 100%; margin: 10px 0; }
+        .badge { display: flex; align-items: center; gap: 8px; padding: 10px 15px; border-radius: 8px; background: #111; font-size: 13px; font-weight: bold; border: 1px solid #333;}
+        .badge.red { border-left: 4px solid red; }
+        .badge.green { border-left: 4px solid #00ff00; }
+        
+        /* Угловые иконки */
+        .corner-icon { 
+            cursor: pointer; 
+            opacity: 0.4; 
+            font-size: 12px; 
+            transition: 0.3s; 
+            position: absolute; 
+            top: 15px; 
+            left: 20px;
+            color: var(--text);
+            text-decoration: none;
+        }
+        .corner-icon:hover { opacity: 1; color: var(--accent2); }
+
+        /* Стили модального окна */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal-content {
+            background: var(--panel);
+            padding: 30px;
+            border-radius: 12px;
+            border: 2px solid var(--accent1);
+            text-align: center;
+            width: 400px;
+            box-shadow: 0 0 30px rgba(0,0,0, 0.8);
+        }
+        .modal-content p { font-size: 16px; line-height: 1.5; margin-bottom: 20px; }
+        .social-btn {
+            display: inline-block;
+            text-decoration: none;
+            color: #fff;
+            padding: 10px 15px;
+            border-radius: 6px;
+            font-weight: bold;
+            margin: 5px;
+            width: 140px;
+            transition: 0.3s;
+        }
+        .social-btn.yt { background-color: #FF0000; }
+        .social-btn.yt:hover { background-color: #cc0000; }
+        .social-btn.tg { background-color: #0088cc; }
+        .social-btn.tg:hover { background-color: #0077b3; }
+        .close-modal { margin-top: 20px; background: #333; width: 50%; }
+    </style>
+</head>
+<body oncontextmenu="return false;"> 
+
+    <!-- Модальное окно (Пасхалка) -->
+    <div id="easterEggModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 id="txtCreatorTitle" style="color: var(--accent2);">От создателя</h2>
+            <p id="txtCreatorP1">Привет! Этот сайт создал <strong>GamerNamless</strong>.</p>
+            <p id="txtCreatorP2">Надеюсь, эта утилита поможет тебе с созданием крутых картин в Minecraft и сэкономит кучу часов жизни.</p>
+            <p id="txtCreatorP3" style="font-size: 14px; color: var(--gray);">Если сайт оказался полезным, подпишись, чтобы не пропустить новый контент!</p>
+            
+            <a href="https://youtube.com/@gamernamless" target="_blank" class="social-btn yt">📺 YouTube</a>
+            <a href="https://t.me/GamerNamless" target="_blank" class="social-btn tg">✈️ Telegram</a>
+            
+            <br>
+            <button id="btnCloseModal" class="close-modal" onclick="closeEasterEgg()">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- ================== МЕНЮ 1: СТАРТ ================== -->
+    <div id="menu1" class="screen active">
+        <span class="corner-icon" onclick="openEasterEgg()">[ 🧨 ]</span>
+        <h1 id="txtWelcome" style="margin-top: 20px;">ДОБРО ПОЖАЛОВАТЬ</h1>
+        <button id="btnStart" onclick="switchScreen('menu2')">Запустить программу</button>
+        <button id="btnSettings" class="btn-secondary" onclick="switchScreen('menuSettings')">⚙️ Настройки</button>
+    </div>
+
+    <!-- ================== МЕНЮ НАСТРОЕК ================== -->
+    <div id="menuSettings" class="screen">
+        <h2 id="txtSettingsTitle">НАСТРОЙКИ</h2>
+
+        <!-- Выбор языка -->
+        <div class="settings-card">
+            <label id="lblLanguage" style="text-align: center; margin-bottom: 12px; font-weight: bold; color: var(--text);">Язык интерфейса / Language:</label>
+            <div class="radio-group" style="margin-bottom: 0;">
+                <label><input type="radio" name="uiLang" value="ru" checked onchange="setLanguage('ru')"> 🇷🇺 Русский</label>
+                <label><input type="radio" name="uiLang" value="en" onchange="setLanguage('en')"> 🇬🇧 English</label>
+            </div>
+        </div>
+
+        <!-- Настройки цветов -->
+        <div class="settings-card">
+            <label id="lblColorsTitle" style="text-align: center; margin-bottom: 12px; font-weight: bold; color: var(--text);">Цвета интерфейса:</label>
+            <div class="custom-colors">
+                <div class="color-item">
+                    <label id="lblColorMain">Основной цвет</label>
+                    <input type="color" id="colorMain" value="#9933CC">
+                </div>
+                <div class="color-item">
+                    <label id="lblColorHover">Вторичный (Наведение)</label>
+                    <input type="color" id="colorHover" value="#FF66CC">
+                </div>
+            </div>
+        </div>
+
+        <button id="btnApplyColors" onclick="applyCustomColors()">Применить цвета</button>
+        <button id="btnBackSettings" class="btn-secondary" onclick="switchScreen('menu1')"><- Назад</button>
+    </div>
+
+    <!-- ================== МЕНЮ 2: ПОЛОТНО ================== -->
+    <div id="menu2" class="screen">
+        <span id="txtReset1" class="corner-icon" onclick="resetToHome()">[ 🏠 Меню (сброс) ]</span>
+        <h2 id="txtCanvasSetupTitle" style="margin-top: 20px;">НАСТРОЙКА ПОЛОТНА</h2>
+        
+        <div class="radio-group">
+            <label><input type="radio" name="mode" value="heads" checked onchange="updateInputSteps()"> <span id="lblModeHeads">В головах (1 блок = 8px)</span></label>
+            <label><input type="radio" name="mode" value="pixels" onchange="updateInputSteps()"> <span id="lblModePixels">В пикселях (шаг 8px)</span></label>
+        </div>
+
+        <div class="form-group" style="display: flex; gap: 10px;">
+            <div style="flex:1;">
+                <label id="lblWidth">Ширина:</label>
+                <input type="number" id="inputW" value="2" min="1" step="1" onchange="validateMin(this)">
+            </div>
+            <div style="flex:1;">
+                <label id="lblHeight">Высота:</label>
+                <input type="number" id="inputH" value="2" min="1" step="1" onchange="validateMin(this)">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label id="lblChooseImg">Выберите изображение (любой размер):</label>
+            <input type="file" id="artUpload" accept="image/*">
+        </div>
+
+        <button id="btnProcessArt" onclick="processArt()">Загрузить и сжать картину</button>
+        <div id="error2" class="error"></div>
+
+        <canvas id="hiddenArtCanvas" style="display: none;"></canvas>
+        <canvas id="previewCanvas" width="200" height="200" style="display: none;"></canvas>
+
+        <button id="btnNext" disabled onclick="switchScreen('menu3')">Далее к скину -></button>
+    </div>
+
+    <!-- ================== МЕНЮ 3: СКИН И МЕСТО ================== -->
+    <div id="menu3" class="screen">
+        <span id="txtReset2" class="corner-icon" onclick="resetToHome()">[ 🏠 Меню (сброс) ]</span>
+        <h2 id="txtSkinSetupTitle" style="margin-top: 20px;">ВЫБОР СКИНА И МЕСТА</h2>
+        
+        <div class="form-group">
+            <label id="lblSkinUpload">Базовый скин (64x64 или 64x32):</label>
+            <input type="file" id="skinUpload" accept="image/png">
+        </div>
+
+        <div class="checkbox-group" style="justify-content: center; margin-bottom: 5px;">
+            <label><input type="checkbox" id="useSecondLayer" onchange="drawSkinCanvas()"> <span id="lblSecondLayer">Добавить второй слой (Шлем)</span></label>
+        </div>
+
+        <div class="badge-container">
+            <div id="badgeLMB" class="badge red">ЛКМ - Основной слой</div>
+            <div id="badgeRMB" class="badge green">ПКМ - Второй слой</div>
+        </div>
+
+        <canvas id="skinCanvas" width="256" height="256"></canvas>
+
+        <button id="btnGoExport" disabled onclick="switchScreen('menu4')">Перейти к настройкам экспорта -></button>
+        <button id="btnBackSkin" class="btn-secondary" onclick="switchScreen('menu2')"><- Назад</button>
+    </div>
+
+    <!-- ================== МЕНЮ 4: ЭКСПОРТ ================== -->
+    <div id="menu4" class="screen">
+        <span id="txtReset3" class="corner-icon" onclick="resetToHome()">[ 🏠 Меню (сброс) ]</span>
+        <h2 id="txtExportTitle" style="margin-top: 20px;">ЭКСПОРТ И СОХРАНЕНИЕ</h2>
+        
+        <div class="form-group">
+            <label id="lblArchiveName">Имя файла/архива:</label>
+            <input type="text" id="archiveName" value="skin_art">
+        </div>
+
+        <div class="form-group" style="background: #111; padding: 15px; border-radius: 8px;">
+            <label id="lblDownloadMethod" style="color: var(--text); font-weight:bold; margin-bottom:10px;">Метод скачивания:</label>
+            <label style="display:block; margin-bottom:10px; cursor:pointer;">
+                <input type="radio" name="exportMode" value="zip" checked> <span id="lblModeZip">📦 Скачать одним ZIP-архивом</span>
+            </label>
+            <label style="display:block; cursor:pointer;">
+                <input type="radio" name="exportMode" value="multiple"> <span id="lblModeMultiple">📄 Скачать все разом (по отдельности)</span>
+            </label>
+            <p id="lblDownloadNote" style="color: var(--gray); font-size: 12px; margin-top: 10px; line-height: 1.4;">
+                * При скачивании по отдельности браузер может запросить разрешение на массовое скачивание.
+            </p>
+        </div>
+
+        <button id="btnFinalExport" onclick="executeExport()">⬇️ СКАЧАТЬ</button>
+        <button id="btnBackExport" class="btn-secondary" onclick="switchScreen('menu3')"><- Назад к скину</button>
+    </div>
+
+    <!-- ================== JS ЛОГИКА ================== -->
+    <script>
+        // Словарь локализации (i18n)
+        const i18n = {
+            ru: {
+                welcome: "ДОБРО ПОЖАЛОВАТЬ",
+                start: "Запустить программу",
+                settings: "⚙️ Настройки",
+                creatorTitle: "От создателя",
+                creatorP1: "Привет! Этот сайт создал <strong>GamerNamless</strong>.",
+                creatorP2: "Надеюсь, эта утилита поможет тебе с созданием крутых картин в Minecraft и сэкономит кучу часов жизни.",
+                creatorP3: "Если сайт оказался полезным, подпишись, чтобы не пропустить новый контент!",
+                closeModal: "Закрыть",
+                settingsTitle: "НАСТРОЙКИ",
+                language: "Язык интерфейса / Language:",
+                colorsTitle: "Цвета интерфейса:",
+                colorMain: "Основной цвет",
+                colorHover: "Вторичный (Наведение)",
+                applyColors: "Применить цвета",
+                back: "<- Назад",
+                resetMenu: "[ 🏠 Меню (сброс) ]",
+                resetConfirm: "Вы уверены? Все настройки и загруженные картинки будут сброшены.",
+                canvasSetupTitle: "НАСТРОЙКА ПОЛОТНА",
+                modeHeads: "В головах (1 блок = 8px)",
+                modePixels: "В пикселях (шаг 8px)",
+                width: "Ширина:",
+                height: "Высота:",
+                chooseImg: "Выберите изображение (любой размер):",
+                processArt: "Загрузить и сжать картину",
+                nextSkin: "Далее к скину ->",
+                errSelectImg: "Выберите картинку!",
+                skinSetupTitle: "ВЫБОР СКИНА И МЕСТА",
+                skinUpload: "Базовый скин (64x64 или 64x32):",
+                secondLayer: "Добавить второй слой (Шлем)",
+                badgeLMB: "ЛКМ - Основной слой",
+                badgeRMB: "ПКМ - Второй слой",
+                goExport: "Перейти к настройкам экспорта ->",
+                errSkinSize: "Скин должен быть размером 64x64 или 64x32!",
+                exportTitle: "ЭКСПОРТ И СОХРАНЕНИЕ",
+                archiveName: "Имя файла/архива:",
+                downloadMethod: "Метод скачивания:",
+                modeZip: "📦 Скачать одним ZIP-архивом",
+                modeMultiple: "📄 Скачать все разом (по отдельности)",
+                downloadNote: "* При скачивании по отдельности браузер может запросить разрешение на массовое скачивание.",
+                downloadBtn: "⬇️ СКАЧАТЬ",
+                generating: "ГЕНЕРАЦИЯ...",
+                backToSkin: "<- Назад к скину",
+                mapSuffix: "_карта.png",
+                batchSuccess: "Все файлы отправлены на скачивание!"
+            },
+            en: {
+                welcome: "WELCOME",
+                start: "Launch Program",
+                settings: "⚙️ Settings",
+                creatorTitle: "From the Creator",
+                creatorP1: "Hey! This tool was built by <strong>GamerNamless</strong>.",
+                creatorP2: "Hope this utility helps you craft awesome Minecraft map arts and saves hours of your time.",
+                creatorP3: "If you found it useful, consider subscribing so you don't miss future updates!",
+                closeModal: "Close",
+                settingsTitle: "SETTINGS",
+                language: "Language / Язык интерфейса:",
+                colorsTitle: "Interface Colors:",
+                colorMain: "Primary Color",
+                colorHover: "Secondary (Hover)",
+                applyColors: "Apply Colors",
+                back: "<- Back",
+                resetMenu: "[ 🏠 Menu (Reset) ]",
+                resetConfirm: "Are you sure? All unsaved settings and uploaded images will be reset.",
+                canvasSetupTitle: "CANVAS CONFIGURATION",
+                modeHeads: "In Player Heads (1 block = 8px)",
+                modePixels: "In Pixels (8px step)",
+                width: "Width:",
+                height: "Height:",
+                chooseImg: "Choose an image (any size):",
+                processArt: "Load and Downscale Image",
+                nextSkin: "Next to Skin Placement ->",
+                errSelectImg: "Please choose an image first!",
+                skinSetupTitle: "SKIN & PLACEMENT SELECTION",
+                skinUpload: "Base skin template (64x64 or 64x32):",
+                secondLayer: "Include 2nd layer (Hat / Helmet)",
+                badgeLMB: "LMB - Base Layer",
+                badgeRMB: "RMB - Overlay Layer",
+                goExport: "Proceed to Export Settings ->",
+                errSkinSize: "The skin must be exactly 64x64 or 64x32 pixels!",
+                exportTitle: "EXPORT & DOWNLOAD",
+                archiveName: "File / Archive Name:",
+                downloadMethod: "Download Mode:",
+                modeZip: "📦 Single ZIP Archive",
+                modeMultiple: "📄 Individual Images (Batch)",
+                downloadNote: "* When downloading individually, your browser might request permission for multiple downloads.",
+                downloadBtn: "⬇️ DOWNLOAD",
+                generating: "GENERATING...",
+                backToSkin: "<- Back to Skin",
+                mapSuffix: "_map.png",
+                batchSuccess: "All files have been queued for download!"
+            }
+        };
+
+        let currentLang = localStorage.getItem('app_lang') || 'ru';
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('app_lang', lang);
+            document.documentElement.lang = lang;
+
+            const t = i18n[lang];
+
+            // Главный экран
+            document.getElementById('txtWelcome').innerText = t.welcome;
+            document.getElementById('btnStart').innerText = t.start;
+            document.getElementById('btnSettings').innerText = t.settings;
+
+            // Пасхалка
+            document.getElementById('txtCreatorTitle').innerText = t.creatorTitle;
+            document.getElementById('txtCreatorP1').innerHTML = t.creatorP1;
+            document.getElementById('txtCreatorP2').innerText = t.creatorP2;
+            document.getElementById('txtCreatorP3').innerText = t.creatorP3;
+            document.getElementById('btnCloseModal').innerText = t.closeModal;
+
+            // Настройки
+            document.getElementById('txtSettingsTitle').innerText = t.settingsTitle;
+            document.getElementById('lblLanguage').innerText = t.language;
+            document.getElementById('lblColorsTitle').innerText = t.colorsTitle;
+            document.getElementById('lblColorMain').innerText = t.colorMain;
+            document.getElementById('lblColorHover').innerText = t.colorHover;
+            document.getElementById('btnApplyColors').innerText = t.applyColors;
+            document.getElementById('btnBackSettings').innerText = t.back;
+
+            // Меню 2: Полотно
+            document.getElementById('txtReset1').innerText = t.resetMenu;
+            document.getElementById('txtCanvasSetupTitle').innerText = t.canvasSetupTitle;
+            document.getElementById('lblModeHeads').innerText = t.modeHeads;
+            document.getElementById('lblModePixels').innerText = t.modePixels;
+            document.getElementById('lblWidth').innerText = t.width;
+            document.getElementById('lblHeight').innerText = t.height;
+            document.getElementById('lblChooseImg').innerText = t.chooseImg;
+            document.getElementById('btnProcessArt').innerText = t.processArt;
+            document.getElementById('btnNext').innerText = t.nextSkin;
+
+            // Меню 3: Скин
+            document.getElementById('txtReset2').innerText = t.resetMenu;
+            document.getElementById('txtSkinSetupTitle').innerText = t.skinSetupTitle;
+            document.getElementById('lblSkinUpload').innerText = t.skinUpload;
+            document.getElementById('lblSecondLayer').innerText = t.secondLayer;
+            document.getElementById('badgeLMB').innerText = t.badgeLMB;
+            document.getElementById('badgeRMB').innerText = t.badgeRMB;
+            document.getElementById('btnGoExport').innerText = t.goExport;
+            document.getElementById('btnBackSkin').innerText = t.back;
+
+            // Меню 4: Экспорт
+            document.getElementById('txtReset3').innerText = t.resetMenu;
+            document.getElementById('txtExportTitle').innerText = t.exportTitle;
+            document.getElementById('lblArchiveName').innerText = t.archiveName;
+            document.getElementById('lblDownloadMethod').innerText = t.downloadMethod;
+            document.getElementById('lblModeZip').innerText = t.modeZip;
+            document.getElementById('lblModeMultiple').innerText = t.modeMultiple;
+            document.getElementById('lblDownloadNote').innerText = t.downloadNote;
+            document.getElementById('btnFinalExport').innerText = t.downloadBtn;
+            document.getElementById('btnBackExport').innerText = t.backToSkin;
+
+            // Переключатель в настройках
+            const radio = document.querySelector(`input[name="uiLang"][value="${lang}"]`);
+            if (radio) radio.checked = true;
+        }
+
+        // Управление модальным окном (Пасхалкой)
+        function openEasterEgg() {
+            document.getElementById('easterEggModal').classList.add('active');
+        }
+        function closeEasterEgg() {
+            document.getElementById('easterEggModal').classList.remove('active');
+        }
+
+        // Цвета
+        function applyCustomColors() {
+            const main = document.getElementById('colorMain').value;
+            const hover = document.getElementById('colorHover').value;
+            document.documentElement.style.setProperty('--accent1', main);
+            document.documentElement.style.setProperty('--accent2', hover);
+        }
+
+        // Навигация
+        function switchScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(el => el.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            if(screenId === 'menu3') drawSkinCanvas();
+        }
+
+        function resetToHome() {
+            if(confirm(i18n[currentLang].resetConfirm)) {
+                location.reload(); 
+            }
+        }
+
+        // Глобальные переменные данных
+        let finalArtW = 0, finalArtH = 0;
+        let baseSkinImage = null;
+        let target1X = 8, target1Y = 8;
+        let target2X = 40, target2Y = 8;
+        
+        const hiddenCtx = document.getElementById('hiddenArtCanvas').getContext('2d');
+        const skinCanvas = document.getElementById('skinCanvas');
+        const skinCtx = skinCanvas.getContext('2d', { willReadFrequently: true });
+        skinCtx.imageSmoothingEnabled = false;
+
+        // Полотно: инпуты
+        function updateInputSteps() {
+            const mode = document.querySelector('input[name="mode"]:checked').value;
+            const inW = document.getElementById('inputW');
+            const inH = document.getElementById('inputH');
+            
+            if (mode === 'heads') {
+                inW.value = Math.max(1, Math.floor(inW.value / 8));
+                inH.value = Math.max(1, Math.floor(inH.value / 8));
+                inW.step = "1"; inW.min = "1";
+                inH.step = "1"; inH.min = "1";
+            } else {
+                inW.value = Math.max(8, inW.value * 8);
+                inH.value = Math.max(8, inH.value * 8);
+                inW.step = "8"; inW.min = "8";
+                inH.step = "8"; inH.min = "8";
+            }
+        }
+
+        function validateMin(input) {
+            if (parseInt(input.value) < parseInt(input.min) || isNaN(input.value)) {
+                input.value = input.min;
+            }
+        }
+
+        function processArt() {
+            const mode = document.querySelector('input[name="mode"]:checked').value;
+            let wVal = parseInt(document.getElementById('inputW').value);
+            let hVal = parseInt(document.getElementById('inputH').value);
+            const fileInput = document.getElementById('artUpload').files[0];
+            const errorDiv = document.getElementById('error2');
+            errorDiv.innerText = '';
+
+            if (mode === 'pixels') {
+                wVal = Math.max(8, Math.round(wVal / 8) * 8);
+                hVal = Math.max(8, Math.round(hVal / 8) * 8);
+                document.getElementById('inputW').value = wVal;
+                document.getElementById('inputH').value = hVal;
+                finalArtW = wVal; finalArtH = hVal;
+            } else {
+                finalArtW = wVal * 8; finalArtH = hVal * 8;
+            }
+
+            if (!fileInput) { 
+                errorDiv.innerText = i18n[currentLang].errSelectImg; 
+                return; 
+            }
+
+            const img = new Image();
+            img.onload = function() {
+                const hCanvas = document.getElementById('hiddenArtCanvas');
+                hCanvas.width = finalArtW; hCanvas.height = finalArtH;
+                hiddenCtx.imageSmoothingEnabled = false;
+                hiddenCtx.drawImage(img, 0, 0, finalArtW, finalArtH);
+
+                const pCanvas = document.getElementById('previewCanvas');
+                pCanvas.style.display = 'block';
+                const pCtx = pCanvas.getContext('2d');
+                pCtx.imageSmoothingEnabled = false;
+                
+                const scale = Math.max(1, Math.floor(200 / Math.max(finalArtW, finalArtH)));
+                pCanvas.width = finalArtW * scale; pCanvas.height = finalArtH * scale;
+                pCtx.drawImage(hCanvas, 0, 0, pCanvas.width, pCanvas.height);
+
+                document.getElementById('btnNext').disabled = false;
+            }
+            img.src = URL.createObjectURL(fileInput);
+        }
+
+        // Скин
+        document.getElementById('skinUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const img = new Image();
+            img.onload = function() {
+                if (img.width !== 64 || (img.height !== 64 && img.height !== 32)) {
+                    alert(i18n[currentLang].errSkinSize); 
+                    return;
+                }
+                baseSkinImage = img;
+                document.getElementById('btnGoExport').disabled = false;
+                drawSkinCanvas();
+            }
+            img.src = URL.createObjectURL(file);
+        });
+
+        skinCanvas.addEventListener('mousedown', function(e) {
+            if (!baseSkinImage) return;
+            const rect = skinCanvas.getBoundingClientRect();
+            const scale = 4;
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            const gridX = Math.floor((clickX / scale) / 8) * 8;
+            const gridY = Math.floor((clickY / scale) / 8) * 8;
+
+            if (e.button === 0) { target1X = gridX; target1Y = gridY; } 
+            else if (e.button === 2) { 
+                if(document.getElementById('useSecondLayer').checked) {
+                    target2X = gridX; target2Y = gridY;
+                }
+            }
+            drawSkinCanvas();
+        });
+
+        function drawSkinCanvas() {
+            skinCtx.clearRect(0, 0, skinCanvas.width, skinCanvas.height);
+            if (baseSkinImage) { skinCtx.drawImage(baseSkinImage, 0, 0, 256, 256); }
+
+            const scale = 4;
+            // Красный
+            skinCtx.strokeStyle = "red"; skinCtx.lineWidth = 3;
+            skinCtx.strokeRect(target1X * scale, target1Y * scale, 8 * scale, 8 * scale);
+            // Зеленый
+            if (document.getElementById('useSecondLayer').checked) {
+                skinCtx.strokeStyle = "#00ff00"; skinCtx.lineWidth = 3;
+                skinCtx.strokeRect(target2X * scale, target2Y * scale, 8 * scale, 8 * scale);
+            }
+        }
+
+        // Экспорт
+        const delay = ms => new Promise(res => setTimeout(res, ms));
+
+        async function executeExport() {
+            if (!baseSkinImage || finalArtW === 0) return;
+            
+            const t = i18n[currentLang];
+            const btn = document.getElementById('btnFinalExport');
+            const originalText = t.downloadBtn;
+            btn.innerText = t.generating;
+            btn.disabled = true;
+
+            const expMode = document.querySelector('input[name="exportMode"]:checked').value;
+            const archName = document.getElementById('archiveName').value || "skins";
+            const useLayer2 = document.getElementById('useSecondLayer').checked;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 64; tempCanvas.height = 64;
+            const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+            tempCtx.imageSmoothingEnabled = false;
+
+            const hiddenCanvas = document.getElementById('hiddenArtCanvas');
+            const cols = finalArtW / 8;
+            const rows = finalArtH / 8;
+            let count = 1;
+
+            const zip = new JSZip();
+            const folder = zip.folder(archName);
+            const filesToDownload = []; 
+
+            // 1. Создаем файлы скинов
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    tempCtx.clearRect(0, 0, 64, 64);
+                    tempCtx.drawImage(baseSkinImage, 0, 0);
+
+                    tempCtx.drawImage(hiddenCanvas, c * 8, r * 8, 8, 8, target1X, target1Y, 8, 8);
+                    if (useLayer2) {
+                        tempCtx.drawImage(hiddenCanvas, c * 8, r * 8, 8, 8, target2X, target2Y, 8, 8);
+                    }
+
+                    const base64Data = tempCanvas.toDataURL("image/png");
+                    const rawB64 = base64Data.replace(/^data:image\/(png|jpg);base64,/, "");
+                    const fileName = `${count}.png`;
+
+                    if (expMode === 'zip') {
+                        folder.file(fileName, rawB64, {base64: true});
+                    } else {
+                        filesToDownload.push({ name: `${archName}_${fileName}`, data: base64Data });
+                    }
+                    count++;
+                }
+            }
+
+            // 2. Создаем Карту-Шпаргалку
+            const mapScale = 4;
+            const mapCanvas = document.createElement('canvas');
+            mapCanvas.width = finalArtW * mapScale; mapCanvas.height = finalArtH * mapScale;
+            const mapCtx = mapCanvas.getContext('2d');
+            mapCtx.imageSmoothingEnabled = false;
+            
+            mapCtx.drawImage(hiddenCanvas, 0, 0, mapCanvas.width, mapCanvas.height);
+            mapCtx.strokeStyle = "rgba(255, 0, 0, 0.7)";
+            mapCtx.lineWidth = 1;
+            mapCtx.textBaseline = "top";
+
+            let mapNum = 1;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const x = c * 8 * mapScale; const y = r * 8 * mapScale;
+                    mapCtx.strokeRect(x, y, 8 * mapScale, 8 * mapScale);
+                    
+                    mapCtx.font = "bold 12px Arial";
+                    const textWidth = mapCtx.measureText(mapNum).width;
+                    mapCtx.fillStyle = "rgba(0,0,0,0.6)";
+                    mapCtx.fillRect(x + 1, y + 1, textWidth + 4, 14);
+                    
+                    mapCtx.fillStyle = "white";
+                    mapCtx.fillText(mapNum, x + 3, y + 2);
+                    mapNum++;
+                }
+            }
+
+            const mapDataUrl = mapCanvas.toDataURL("image/png");
+            const mapName = `${archName}${t.mapSuffix}`;
+            
+            // 3. Сохранение
+            if (expMode === 'zip') {
+                const mapRawB64 = mapDataUrl.replace(/^data:image\/(png|jpg);base64,/, "");
+                folder.file(mapName, mapRawB64, {base64: true});
+                
+                zip.generateAsync({type:"blob"}).then(function(content) {
+                    const link = document.createElement("a");
+                    link.href = URL.createObjectURL(content);
+                    link.download = `${archName}.zip`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                });
+            } else {
+                filesToDownload.push({ name: mapName, data: mapDataUrl });
+                
+                for(let i = 0; i < filesToDownload.length; i++) {
+                    const link = document.createElement("a");
+                    link.href = filesToDownload[i].data;
+                    link.download = filesToDownload[i].name;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    await delay(150); 
+                }
+                btn.innerText = originalText;
+                btn.disabled = false;
+                alert(t.batchSuccess);
+            }
+        }
+
+        // Инициализация языка при старте
+        setLanguage(currentLang);
+    </script>
+</body>
+</html>
